@@ -1,0 +1,56 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  API Gateway Model Enforcement tests
+
+Resources:
+  MyRestAPIForTesting:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: "BigCommerce"
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+  MatchingResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt MyRestAPIForTesting.RootResourceId
+      PathPart: "get-variants"
+      RestApiId: !Ref MyRestAPIForTesting
+  MatchingMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      HttpMethod: GET
+      ResourceId: !Ref MatchingResource
+      RestApiId: !Ref MyRestAPIForTesting
+      AuthorizationType: NONE
+      RequestParameters:
+        method.request.querystring.product_id: true #true = query string is required
+      MethodResponses:
+        - ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+          StatusCode: 200
+      Integration:
+        IntegrationHttpMethod: ANY
+        Type: HTTP_PROXY
+        RequestParameters:
+          integration.request.path.id: 'method.request.querystring.product_id'
+          integration.request.header.X-Auth-Token: 'TOKEN'
+          integration.request.header.X-Auth-Client	: 'CLIENT_ID'
+        Uri: https://api.bigcommerce.com/stores/my-store-hash/v3/catalog/products/{id}/variants?include_fields=calculated_price,inventory_level,sku,option_values,image_url
+        PassthroughBehavior: NEVER
+        IntegrationResponses:
+          - StatusCode: 200
+
+  APIDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - MatchingMethod
+    Properties:
+      Description: "Prod Stage for"
+      RestApiId:
+        Ref: MyRestAPIForTesting
+      StageName: Prod
+
+Outputs:
+  APIID:
+    Value: !Ref MyRestAPIForTesting
